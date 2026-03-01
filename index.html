@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HANI Particle Animation</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050505; /* Hitam pekat futuristik */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui-layer {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 10;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-size: 12px;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #00d4ff;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+        }
+
+        /* Gradient background halus */
+        .bg-gradient {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, #111 0%, #050505 100%);
+            z-index: -1;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-gradient"></div>
+    <canvas id="canvas"></canvas>
+    
+    <div id="ui-layer">
+        <button onclick="toggleFormation()">Bentuk Kata</button>
+        <button onclick="scatter()">Acak</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let particles = [];
+        let isForming = false;
+        const mouse = { x: 0, y: 0, radius: 80 };
+
+        // Konfigurasi Estetik
+        const config = {
+            particleCount: 1800,
+            fontSize: 180,
+            fontName: 'Arial',
+            text: 'HANI',
+            particleColor: '#00d4ff', // Biru Cyan Neon
+            scatterSpeed: 1.5,
+            formationSpeed: 0.08
+        };
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.x;
+            mouse.y = e.y;
+        });
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor() {
+                this.init();
+            }
+
+            init() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.baseX = this.x;
+                this.baseY = this.y;
+                this.targetX = this.x;
+                this.targetY = this.y;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.color = config.particleColor;
+                this.vx = (Math.random() - 0.5) * config.scatterSpeed;
+                this.vy = (Math.random() - 0.5) * config.scatterSpeed;
+                this.density = (Math.random() * 30) + 1;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.fill();
+
+                // Tambahkan sedikit glow jika sedang membentuk kata
+                if (isForming) {
+                    ctx.shadowBlur = 5;
+                    ctx.shadowColor = config.particleColor;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            update() {
+                if (isForming) {
+                    // Pergerakan ke target
+                    let dx = this.targetX - this.x;
+                    let dy = this.targetY - this.y;
+                    this.x += dx * config.formationSpeed;
+                    this.y += dy * config.formationSpeed;
+                } else {
+                    // Pergerakan acak (floating)
+                    this.x += this.vx;
+                    this.y += this.vy;
+
+                    // Pantulan layar
+                    if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+                    if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+                }
+
+                // Interaksi Mouse (Push effect)
+                let mDx = mouse.x - this.x;
+                let mDy = mouse.y - this.y;
+                let distance = Math.sqrt(mDx*mDx + mDy*mDy);
+                
+                if (distance < mouse.radius) {
+                    let force = (mouse.radius - distance) / mouse.radius;
+                    let directionX = mDx / distance;
+                    let directionY = mDy / distance;
+                    this.x -= directionX * force * 5;
+                    this.y -= directionY * force * 5;
+                }
+            }
+        }
+
+        function getTextCoordinates() {
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+
+            tempCtx.fillStyle = 'white';
+            tempCtx.font = `bold ${config.fontSize}px ${config.fontName}`;
+            tempCtx.textAlign = 'center';
+            tempCtx.textBaseline = 'middle';
+            tempCtx.fillText(config.text, canvas.width/2, canvas.height/2);
+
+            const buffer = tempCtx.getImageData(0, 0, canvas.width, canvas.height).data;
+            const coords = [];
+            const step = 4; // Kerapatan partikel
+
+            for (let y = 0; y < canvas.height; y += step) {
+                for (let x = 0; x < canvas.width; x += step) {
+                    if (buffer[(y * canvas.width + x) * 4 + 3] > 128) {
+                        coords.push({x, y});
+                    }
+                }
+            }
+            return coords;
+        }
+
+        function init() {
+            particles = [];
+            for (let i = 0; i < config.particleCount; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function toggleFormation() {
+            const coords = getTextCoordinates();
+            isForming = true;
+            
+            particles.forEach((p, i) => {
+                const target = coords[i % coords.length];
+                p.targetX = target.x;
+                p.targetY = target.y;
+            });
+        }
+
+        function scatter() {
+            isForming = false;
+            particles.forEach(p => {
+                p.vx = (Math.random() - 0.5) * config.scatterSpeed;
+                p.vy = (Math.random() - 0.5) * config.scatterSpeed;
+            });
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animate);
+        }
+
+        init();
+        animate();
+    </script>
+</body>
+</html>
